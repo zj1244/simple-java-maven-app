@@ -5,20 +5,26 @@ pipeline {
             args '-v /root/.m2:/root/.m2'
         }
     }
-    stages {
-        stage('Build') {
+    stages { 
+        stage('Setup') {
             steps {
-                sh 'mvn -B -DskipTests clean package'
+                script {
+                    startZap(host: "127.0.0.1", port: 9091, timeout:500, zapHome: "/opt/zaproxy", sessionPath:"/somewhere/session.session", allowedHosts:['github.com']) // Start ZAP at /opt/zaproxy/zap.sh, allowing scans on github.com (if allowedHosts is not provided, any local addresses will be used
+                }
             }
         }
-        stage('Test') { 
+        stage('Build & Test') {
             steps {
-                sh 'mvn test' 
-            }
-            post {
-                always {
-                    junit 'target/surefire-reports/*.xml' 
+                script {
+                    sh "mvn verify -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9091 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9091" // Proxy tests through ZAP
                 }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                archiveZap(failAllAlerts: 1, failHighAlerts: 0, failMediumAlerts: 0, failLowAlerts: 0, falsePositivesFilePath: "zapFalsePositives.json")
             }
         }
     }
